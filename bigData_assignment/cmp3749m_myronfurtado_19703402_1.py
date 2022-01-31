@@ -1,5 +1,6 @@
 #import python packages that are needed
 from operator import index
+from turtle import color
 from unicodedata import numeric
 from matplotlib import axis
 
@@ -100,10 +101,10 @@ maxAbnormal = abnormalDropDF.max()
 #calculate the Mean features of dfNormal or dfAbnormal groups using df.mean() Pandas function
 meanNormal = normalDropDF.mean()
 meanAbnormal = abnormalDropDF.mean()
-print("\nThe Mean values for Normal group: ")
-print(meanNormal)
-print("\nThe Mean values for Abnormal group")
-print(meanAbnormal)
+##print("\nThe Mean values for Normal group: ")
+##print(meanNormal)
+##print("\nThe Mean values for Abnormal group")
+##print(meanAbnormal)
 
 
 #calculate the Median features of dfNormal or dfAbnormal groups using the df.median() Pandas function
@@ -128,6 +129,7 @@ temp=[]
 for i in abnormalDropDF.columns:
     temp.append(abnormalDropDF[i].value_counts().idxmax())
 ##print("\nMode for Abnormal: ", temp)
+print("\n")
 
 
 #variance values
@@ -139,9 +141,7 @@ varianceAbnormal = abnormalDropDF.var()
 ##print(varianceAbnormal)
 
 
-#Plotting the Features for Normal and Abnormal groups using boxplots
-sns.set_theme(style="whitegrid")
-#caluclate the DataFrame
+#(Boxplots) for the Features of Normal and Abnormal groups
 #Function to get the required feature column from both groups into a single dataframe
 def plotVals(col1, col2):
     #for Normal DataFrame only select the required column and rename that column to Normal for the plot
@@ -153,83 +153,63 @@ def plotVals(col1, col2):
     
     return normalCol, abnormalCol
 
-#create new Dataframe with the required Normal and Abnormal feature
-#calling function with required rows and combining them into a new DataFrame
-plotDF1 = pd.concat(plotVals('Power_range_sensor_1', 'Power_range_sensor_1'), axis=1)
-#print(plotDF1)
-#plot for feature 2
-plotDF2 = pd.concat(plotVals('Power_range_sensor_2', 'Power_range_sensor_2'), axis=1)
-#print(plotDF2)
-plotDF3= pd.concat(plotVals('Power_range_sensor_3 ', 'Power_range_sensor_3 '), axis=1)
-plotDF4= pd.concat(plotVals('Power_range_sensor_4', 'Power_range_sensor_4'), axis=1)
-plotDF5= pd.concat(plotVals('Pressure _sensor_1', 'Pressure _sensor_1'), axis=1)
-plotDF6= pd.concat(plotVals('Pressure _sensor_2', 'Pressure _sensor_2'), axis=1)
-plotDF7= pd.concat(plotVals('Pressure _sensor_3', 'Pressure _sensor_3'), axis=1)
-plotDF8= pd.concat(plotVals('Pressure _sensor_4', 'Pressure _sensor_4'), axis=1)
-plotDF9= pd.concat(plotVals('Vibration_sensor_1', 'Vibration_sensor_1'), axis=1)
-plotDF10= pd.concat(plotVals('Vibration_sensor_2', 'Vibration_sensor_2'), axis=1)
-plotDF11= pd.concat(plotVals('Vibration_sensor_3', 'Vibration_sensor_3'), axis=1)
-plotDF12= pd.concat(plotVals('Vibration_sensor_4', 'Vibration_sensor_4'), axis=1)
+#loops throught each colum and generates a boxplot
+## for column in pandas_df.iloc[: , 1:].columns:
+##     #Calling function with required rows and combining them into a new DataFrame
+##     plotDF = pd.concat(plotVals(column,column), axis=1)
 
-#Code for the box plots
-#sns.set_theme(style="whitegrid")
-#counter= np.arange(12)
-#for i in counter:
-#    i += 1
-#    plotDF1.boxplot(column=['Normal', 'Abnormal'])
-#    #plt.show()
-#    plotDF2.boxplot(column=['Normal', 'Abnormal'])
-#    #plt.show()
-#    if i == 11:
-#        break
-#plt.show()
+##     #styling the box plots and Median line
+##     plt.figure(figsize=(8,8))
+##     medianprops = dict(linestyle='-', linewidth=1, color='g')
+##     boxprops = dict(linestyle='-', linewidth=2, color='b')
+##     #calling the boxplot
+##     plotDF.boxplot(column=['Normal', 'Abnormal'], boxprops=boxprops, medianprops=medianprops)
+    
+##     plt.suptitle(column)
+##     plt.savefig(column)
+##     plt.show()
 
-#Code for the box plots (use this unless the loop works)
-#plotDF1.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Power_range_sensor_1')
-#plt.show()
-#plt.figure()
-#plotDF2.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Power_range_sensor_2')
-#plt.show()
-#plotDF3.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Power_range_sensor_3 ')
-#plt.show()
-#plotDF4.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Power_range_sensor_4')
-#plt.show()
-#plotDF5.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Pressure_sensor_1')
-#plt.show()
-#plotDF6.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Pressure_sensor_2')
-#plt.show()
-#plotDF7.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Pressure_sensor_3')
-#plt.show()
-#plotDF8.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Pressure_sensor_4')
-#plt.show()
-#plotDF9.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Vibration_sensor_1')
-#plt.show()
-#plotDF10.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Vibration_sensor_2')
-#plt.show()
-#plotDF11.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Vibration_sensor_3')
-#plt.show()
-#plotDF12.boxplot(column=['Normal', 'Abnormal'])
-#plt.suptitle('Vibration_sensor_4')
-#plt.show()
-
-#<----------------------------------------------------------------------------------------------------------------------------------------------------->
-#task 3
+# <----------------------------------------------------------------------------------------------------------------------------------------------------->
+# task 3
 #correlation between Features for the full dataset
 #pd.set_option('display.max_rows', None, 'display.max_columns', None) #this prints the full pandas matrix but it looks unprofessional
 
-correlationMatrix = pandas_df.corr(method='pearson')
-##print(correlationMatrix)
+##plt.figure(figsize=(16,8))
+##correlationMatrix = pandas_df.corr(method='pearson')
+##ax = sns.heatmap(correlationMatrix, annot=True, cmap="Blues")
+
+##ax.set_title('Correlation Heatmap')
+##ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+##ax.set_yticklabels(ax.get_yticklabels(), fontsize=10)
+##plt.tight_layout()
+##plt.show()
+
+#<----------------------------------------------------------------------------------------------------------------------------------------------------->
+#importing the required libraries
+#stringIndexer
+from pyspark.ml.feature import StringIndexer
+#vectorAssember
+from pyspark.sql.functions import col
+#Normaliser
+
+
+
+#<----------------------------------------------------------------------------------------------------------------------------------------------------->
+#Using StringIndexer (on "Status" column)
+stringIndexer = StringIndexer(inputCol="Status", outputCol="StatusIndex", stringOrderType="alphabetAsc")
+stringIndexed = stringIndexer.fit(df).transform(df)
+#print
+stringIndexed.select("Status","StatusIndex").sampleBy("StatusIndex", fractions={1.0: 0.02, 0.0: 0.05}).show(n=20)
+
+#drop the Status colum now that we have index values for it
+stringIndexed = stringIndexed.drop("Status")
+stringIndexed.show()
+
+#<----------------------------------------------------------------------------------------------------------------------------------------------------->
+#Vector Assembler
+
+#<----------------------------------------------------------------------------------------------------------------------------------------------------->
+#Normalise the values
 
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
 #task 4
@@ -239,8 +219,13 @@ train, test= df.randomSplit([0.7, 0.3])
 ##print('Total dataset records: ', df.count())
 ##print('Train dataset records count: ', train.count())
 ##print('Test dataset records count: ', test.count())
+##test.show(250)
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
 #task 5
+
+#Use string indexer transformation to change Status to a number value then drop the status column (might have to do this before splitting the data to make it easier)
+#Create a Normalizer transform on the adataset as it improves the ANN performance
+#could try to use a vector assembler to sumush all the columns into a single 'features' column to pass to the algorithm.
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
 #task 6
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
