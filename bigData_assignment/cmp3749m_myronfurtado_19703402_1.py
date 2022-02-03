@@ -1,13 +1,17 @@
 #import python packages that are needed
-from operator import index
-from turtle import color
-from unicodedata import numeric
-from matplotlib import axis
+#from operator import index
+#from turtle import color
+#from unicodedata import numeric
+#from matplotlib import axis
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+from pyspark.sql.functions import col
+from pyspark.sql.types import StructType,StructField,StringType,IntegerType
+from pyspark.sql.types import IntegerType
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
 #To remove warning from the terminal when doing the box plots
 from os import environ
@@ -20,13 +24,14 @@ if __name__ == "__main__":
     suppress_qt_warnings()
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
 #my code was not working without this. had to use findspark and the use findspark to find pyspark
-#import findspark
-#findspark.init()
+import findspark
+findspark.init()
 
 #import pyspark library and SparkSession class
 import pyspark
 from pyspark.sql import SparkSession
 #create the SparkSession
+#spark = SparkSession.builder.master('local[*]').config('spark.driver.memory','32G').getOrCreate()
 spark = SparkSession.builder.getOrCreate()
 textdf = spark.sql("select 'spark' as hello")
 textdf.show()
@@ -185,56 +190,207 @@ def plotVals(col1, col2):
 ##plt.show()
 
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
+#task 4
+
+#Splitting the data into train and test samples
+train, test= df.randomSplit([0.7, 0.3])
+
+print('Train dataset records count: ', train.count())
+print('Test dataset records count: ', test.count())
+print("\n")
+
+#<----------------------------------------------------------------------------------------------------------------------------------------------------->
+#task 5
+
 #importing the required libraries
 #stringIndexer
 from pyspark.ml.feature import StringIndexer
 #vectorAssember
-from pyspark.sql.functions import col
+from pyspark.ml.linalg import Vectors
+from pyspark.ml.feature import VectorAssembler
 #Normaliser
+from pyspark.ml.feature import Normalizer
+#Pipline and classifiers
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import DecisionTreeClassifier
+from pyspark.ml.classification import LinearSVC
+from pyspark.ml.classification import MultilayerPerceptronClassifier
 
-
-
+#Perform transforms on the train dataset
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
 #Using StringIndexer (on "Status" column)
-stringIndexer = StringIndexer(inputCol="Status", outputCol="StatusIndex", stringOrderType="alphabetAsc")
-stringIndexed = stringIndexer.fit(df).transform(df)
-#print
-stringIndexed.select("Status","StatusIndex").sampleBy("StatusIndex", fractions={1.0: 0.02, 0.0: 0.05}).show(n=20)
-
+stringIndexer = StringIndexer(inputCol="Status", outputCol="statusLabel", stringOrderType="alphabetAsc")
+stringIndexed = stringIndexer.fit(train).transform(train)
+stringIndexed.select("Status","statusLabel").sampleBy("statusLabel", fractions={0.0: 0.03, 1.0: 0.03}).show(n=25)
 #drop the Status colum now that we have index values for it
 stringIndexed = stringIndexed.drop("Status")
-stringIndexed.show()
+#stringIndexed.show()
 
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
 #Vector Assembler
+vAssembler = VectorAssembler(inputCols=["Power_range_sensor_1","Power_range_sensor_2","Power_range_sensor_3 ","Power_range_sensor_4",
+                                        "Pressure _sensor_1","Pressure _sensor_2","Pressure _sensor_3","Pressure _sensor_4",
+                                        "Vibration_sensor_1","Vibration_sensor_2","Vibration_sensor_3","Vibration_sensor_4"],
+                                        outputCol="features")
+assembledVector = vAssembler.transform(stringIndexed)
+#assembledVector.printSchema()
+#Drop all columns other than "features" and "Status Index"
+assembledVector = assembledVector.drop("Power_range_sensor_1","Power_range_sensor_2","Power_range_sensor_3 ","Power_range_sensor_4",
+                                        "Pressure _sensor_1","Pressure _sensor_2","Pressure _sensor_3","Pressure _sensor_4",
+                                        "Vibration_sensor_1","Vibration_sensor_2","Vibration_sensor_3","Vibration_sensor_4")
+
+##assembledVector.select("statusLabel", "features").show(n=20, truncate=False)
+##print("assembled vector: ")
+#assembledVector.printSchema()
 
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
 #Normalise the values
+normalizer = Normalizer(inputCol=vAssembler.getOutputCol(), outputCol="normFeatures", p=1.0)
+l1NormData = normalizer.transform(assembledVector)
+##print("Normalized using L^1 norm: ")
+##l1NormData.show(truncate=False)
+#l1NormData.printSchema()
 
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
-#task 4
-#Splitting the data into train and test samples
-train, test= df.randomSplit([0.7, 0.3])
+#Pipeline for DecisionTree model
+print("------------------------------------------------------------------------------Pipeline for Decision Tree-----------------------------------------------------------------------------")
+#use output of vectorAssembler as input indtead of Normaliser as it improves accuracy by 10%
+dt= DecisionTreeClassifier(featuresCol="normFeatures", labelCol="statusLabel")
+#declare stages variable
+stagesDecisionTree = [stringIndexer, vAssembler, normalizer, dt]
+#instantiate the pipeline by passing stages variable to it
+pipeline1 = Pipeline(stages=stagesDecisionTree)
+#Fit the model on the training set by calline the train dataframe
+pipemodelDT = pipeline1.fit(train)
 
-##print('Total dataset records: ', df.count())
-##print('Train dataset records count: ', train.count())
-##print('Test dataset records count: ', test.count())
-##test.show(250)
-#<----------------------------------------------------------------------------------------------------------------------------------------------------->
-#task 5
+#run the trained PipelineModel on the test set
+predictedDecsionTree = pipemodelDT.transform(test)
+##predictedDecsionTree.printSchema()
+#drop non-essential columns
+predictedDecsionTree = predictedDecsionTree.drop("Power_range_sensor_1","Power_range_sensor_2","Power_range_sensor_3 ","Power_range_sensor_4",
+                                                 "Pressure _sensor_1","Pressure _sensor_2","Pressure _sensor_3","Pressure _sensor_4",
+                                                 "Vibration_sensor_1","Vibration_sensor_2","Vibration_sensor_3","Vibration_sensor_4",
+                                                "features","rawprediction","probability")
 
-#Use string indexer transformation to change Status to a number value then drop the status column (might have to do this before splitting the data to make it easier)
-#Create a Normalizer transform on the adataset as it improves the ANN performance
-#could try to use a vector assembler to sumush all the columns into a single 'features' column to pass to the algorithm.
+#converting 'statusLabel' and 'prediction' columns, from double to interger type
+predictedDescisionTreefn= predictedDecsionTree.withColumn("statusLabel",predictedDecsionTree["statusLabel"].cast(IntegerType())).withColumn("prediction",predictedDecsionTree["prediction"].cast(IntegerType()))
+print("Schema of the predicted table: ")
+predictedDescisionTreefn.printSchema()
+##print("Descision Tree Prediction table: ")
+##predictedDescisionTreefn.show()
+
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
-#task 6
+#Pipeline for Support Vector Machine
+print("------------------------------------------------------------------------------Pipeline for Support Vector Machine-----------------------------------------------------------------------")
+#Trainng SVC model
+lsvc= LinearSVC(featuresCol='normFeatures', labelCol='statusLabel', maxIter=100, regParam=0.0,) 
+#Stages variable
+stagesSVC = [stringIndexer, vAssembler, normalizer, lsvc]
+#instantiate pipeline
+pipeline2 = Pipeline(stages=stagesSVC)
+#fit the pipeline model to train set
+pipemodelSVC = pipeline2.fit(train)
+
+#Run the trained PipelineModel on the test set
+predictedSVC = pipemodelSVC.transform(test)
+
+#drop non-essential columns
+predictedSVC = predictedSVC.drop("Power_range_sensor_1","Power_range_sensor_2","Power_range_sensor_3 ","Power_range_sensor_4",
+                                                 "Pressure _sensor_1","Pressure _sensor_2","Pressure _sensor_3","Pressure _sensor_4",
+                                                 "Vibration_sensor_1","Vibration_sensor_2","Vibration_sensor_3","Vibration_sensor_4",
+                                                "features","rawprediction","probability")
+#predictedSVC.show(n=20)
+#predictedSVC.printSchema()
+
+#converting 'statusLabel' and 'prediction' columns, from double to interger type
+predictedSVCfn= predictedSVC.withColumn("statusLabel",predictedSVC["statusLabel"].cast(IntegerType())).withColumn("prediction",predictedSVC["prediction"].cast(IntegerType()))
+print("Schema of the predicted table: ")
+predictedSVCfn.printSchema()
+##print("Support vector machine(SVC) Prediction table: ")
+##predictedSVCfn.show()
+
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
-#task 7
+#Pipeline for Artificial Neural Network(MLP or ANN)
+print("------------------------------------------------------------------------------Pipeline for Artificial Neural Network---------------------------------------------------------------------")
+#Trainng ANN model
+
+layers = [12, 15, 2] #here first value(12) is the number of values in the featuresCol-normFeatures and last value(2) is the number of values in teh outpot col
+ann = MultilayerPerceptronClassifier(featuresCol='normFeatures', labelCol='statusLabel', maxIter=500, layers=layers)
+#declare stages variable
+stagesANN = [stringIndexer, vAssembler, normalizer, ann]
+#instantiate the pipeline by passing stages variable to it
+pipeline3 = Pipeline(stages=stagesANN)
+#Fit the model on the training set by calline the train dataframe
+pipemodelANN = pipeline3.fit(train)
+
+#run the trained PipelineModel on the test set
+predictedANN = pipemodelANN.transform(test)
+#drop non-essential columns
+predictedANN = predictedANN.drop("Power_range_sensor_1","Power_range_sensor_2","Power_range_sensor_3 ","Power_range_sensor_4",
+                                                 "Pressure _sensor_1","Pressure _sensor_2","Pressure _sensor_3","Pressure _sensor_4",
+                                                 "Vibration_sensor_1","Vibration_sensor_2","Vibration_sensor_3","Vibration_sensor_4",
+                                                "features","normFeatures","rawprediction","probability")
+
+#converting 'statusLabel' and 'prediction' columns, from double to interger type
+predictedANNfn= predictedANN.withColumn("statusLabel",predictedANN["statusLabel"].cast(IntegerType())).withColumn("prediction",predictedANN["prediction"].cast(IntegerType()))
+print("Schema of the predicted table: ")
+predictedANNfn.printSchema()
+##print("Support vector machine(SVC) Prediction table: ")
+##predictedANNfn.show()
+
+#<----------------------------------------------------------------------------------------------------------------------------------------------------->
+#error rate
+def predictions(predicted, toSay):
+    
+    #calculating accuracy for Training Tree
+    accuracy = predicted.filter(predicted.statusLabel == predicted.prediction).count() / float(test.count())
+    print("\nThe accuracy of the", toSay, accuracy)
+    
+    # count how many rows have correct positive predictions
+    positivecorrect = predicted.where((col("statusLabel")=="1") & (col("prediction")==1)).count()
+    #print("positivecorrect: " + str(positivecorrect))
+    # count how many rows have correct negative predictions
+    negativecorrect = predicted.where((col("statusLabel")=="0") & (col("prediction")==0)).count()
+    #print("negative correct: " + str(negativecorrect))
+    # count how many rows have incorrect positive predictions
+    positiveincorrect = predicted.where((col("statusLabel")=="1") & (col("prediction")==0)).count()
+    #print("positive incorrect: " + str(positiveincorrect))
+    # count how many rows have incorrect negative predictions
+    negativeincorrect = predicted.where((col("statusLabel")=="0") & (col("prediction")==1)).count()
+    #print("negative incorrect: " + str(negativeincorrect))
+
+    #Error rate
+    num1 = positiveincorrect+negativeincorrect
+    print("Total Incorrectly calssified: ",num1)
+    num2 = positivecorrect+negativecorrect
+    print("Total Correctly calssified: ",num2)
+    errorRate = num1/num2
+    print("Error rate: ", errorRate)
+    
+    #Sensitivity(True positive Rate)
+    num1 = positivecorrect+negativeincorrect
+    sensitivity = positivecorrect/num1
+    print("Sensitivity: ", sensitivity)
+    
+    #Specificity(True negative rate)
+    num1 = negativecorrect+positiveincorrect
+    specificity = negativecorrect/num1
+    print("Specificity: ",specificity)
+    return positivecorrect, negativecorrect, positiveincorrect, negativeincorrect, errorRate, sensitivity, specificity
+
+#Calling the predicted df of the given algorithm
+print("------------------------------------------------------------------------------Pipeline for Decision Tree--------------------------------------------------------------------------------")
+predictions(predictedDescisionTreefn, "Decision Tree classifier: ")
+print("------------------------------------------------------------------------------Pipeline for Support Vector Machine-----------------------------------------------------------------------")
+predictions(predictedSVCfn, "SVC classifier: ")
+print("------------------------------------------------------------------------------Pipeline for Artificial Neural Network--------------------------------------------------------------------")
+predictions(predictedANNfn, "Artificial Neural Network(MPC) classifier: ")
+print("\n")
+
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
 #task 8
-#<----------------------------------------------------------------------------------------------------------------------------------------------------->
-
-#<----------------------------------------------------------------------------------------------------------------------------------------------------->
 
 #<----------------------------------------------------------------------------------------------------------------------------------------------------->
 # %%
+#to stop the Sparksession to save memory
+spark.stop()
